@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>접이식 배너 코드 생성기</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1d2330;--sub:#667085;--line:#d9dde5;--acc:#2f5bd8;--accink:#fff;--code:#14181f;--codeink:#d7dde8}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1b2029;--ink:#e8ebf1;--sub:#97a0b0;--line:#2c3340;--acc:#6b8cf0;--accink:#0c1020}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 system-ui,-apple-system,"Noto Sans KR","Malgun Gothic",sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:22px;margin:0 0 4px}
+p.d{margin:0 0 20px;color:var(--sub)}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{font-size:16px;margin:0}
+.bh{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+h3{font-size:14px;margin:16px 0 8px}
+label{display:block;font-size:13px;color:var(--sub);margin:10px 0 4px}
+input[type=text],input[type=number]{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+input:focus,textarea:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.cell{border:1px solid var(--line);border-radius:8px;padding:4px 12px 12px;margin-bottom:10px}
+.cell header{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-weight:600}
+button{font:inherit;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+button.p{background:var(--acc);color:var(--accink);border-color:var(--acc);font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row input[type=number]{width:80px}
+textarea{width:100%;height:320px;background:var(--code);color:var(--codeink);border:0;border-radius:8px;padding:12px;font:13px/1.5 ui-monospace,Consolas,monospace;white-space:pre;overflow:auto;resize:vertical}
+iframe{width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.hint{font-size:13px;color:var(--sub);margin:6px 0 0}
+</style>
+</head>
+<body>
+<main>
+<h1>접이식 배너 코드 생성기</h1>
+<p class="d">링크만 넣으면 아래에 완성된 코드가 바로 만들어져요. 배경 파트는 필요한 만큼 추가할 수 있어요.</p>
+
+<div id="blocks"></div>
+<div class="row" style="margin-bottom:16px"><button type="button" id="addBlock">배경 파트 추가</button></div>
+
+<section>
+<h2>완성 코드</h2>
+<div class="row" style="margin:10px 0"><button type="button" class="p" id="copy">코드 복사</button><span id="msg" class="hint" role="status"></span></div>
+<textarea id="out" readonly aria-label="생성된 코드"></textarea>
+<p class="hint">배경 파트가 여러 개면 위에서 아래 순서대로 이어 붙여져요.</p>
+</section>
+
+<section>
+<h2 style="margin-bottom:10px">미리보기</h2>
+<iframe id="pv" sandbox title="미리보기"></iframe>
+</section>
+</main>
+
+<script>
+var $=function(i){return document.getElementById(i)};
+var blocksEl=$('blocks'),KEY='arca-banner-gen-v2',W=['33.3333','33.2959','33.2958'],nl='\n',T='\t';
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function cssurl(s){return String(s).replace(/'/g,'%27').replace(/"/g,'%22')}
+
+function addCell(box,v){
+  v=v||{};
+  var d=document.createElement('div');d.className='cell';
+  d.innerHTML='<header><span class="n"></span><button type="button" class="rm">삭제</button></header>'+
+  '<label>사이트 링크</label><input type="text" class="s">'+
+  '<label>이미지 링크</label><input type="text" class="i">'+
+  '<label>원본 이미지 링크</label><input type="text" class="o">';
+  d.querySelector('.s').value=v.s||'';d.querySelector('.i').value=v.i||'';d.querySelector('.o').value=v.o||'';
+  d.querySelector('.rm').onclick=function(){d.remove();renumCells(box);update()};
+  box.querySelector('.cells').appendChild(d);renumCells(box);
+}
+function renumCells(box){[].forEach.call(box.querySelectorAll('.cell'),function(c,k){c.querySelector('.n').textContent='칸 '+(k+1)})}
+
+function addBlock(v){
+  v=v||{};
+  var b=document.createElement('section');b.className='blk';
+  b.innerHTML='<div class="bh"><h2 class="t"></h2><button type="button" class="rmb">파트 삭제</button></div>'+
+  '<label>배경 이미지 링크 (전체 박스)</label><input type="text" class="bg" placeholder="//ac.arca.live/...png?expires=...">'+
+  '<label>배너 이미지 링크 (접힌 상태)</label><input type="text" class="bn" placeholder="비워두면 위 배경 이미지와 같은 링크를 써요">'+
+  '<h3>채널 칸</h3><div class="cells"></div>'+
+  '<div class="row"><button type="button" class="addc">칸 추가</button><label style="margin:0 0 0 8px">표 줄 수</label><input type="number" class="rows" min="1" max="20" value="4"></div>'+
+  '<p class="hint">줄 수만큼 3칸씩 표가 만들어지고, 남는 자리는 빈 칸으로 채워져요. 원본 이미지 링크를 비우면 이미지 링크를 대신 써요.</p>';
+  b.querySelector('.bg').value=v.bg||'';b.querySelector('.bn').value=v.bn||'';b.querySelector('.rows').value=v.rows||4;
+  b.querySelector('.addc').onclick=function(){addCell(b);update()};
+  b.querySelector('.rmb').onclick=function(){b.remove();renumBlocks();update()};
+  blocksEl.appendChild(b);
+  var cs=v.cells&&v.cells.length?v.cells:[{}];
+  cs.forEach(function(c){addCell(b,c)});
+  renumBlocks();
+}
+function renumBlocks(){
+  var bs=blocksEl.children;
+  [].forEach.call(bs,function(b,k){b.querySelector('.t').textContent='배경 파트 '+(k+1);b.querySelector('.rmb').disabled=bs.length<2});
+}
+function getBlocks(){
+  return [].map.call(blocksEl.children,function(b){
+    return{bg:b.querySelector('.bg').value.trim(),bn:b.querySelector('.bn').value.trim(),rows:b.querySelector('.rows').value,
+      cells:[].map.call(b.querySelectorAll('.cell'),function(c){return{s:c.querySelector('.s').value.trim(),i:c.querySelector('.i').value.trim(),o:c.querySelector('.o').value.trim()}})};
+  });
+}
+
+function build(B){
+  var bg=B.bg,bn=B.bn||B.bg,rows=Math.max(1,Math.min(20,parseInt(B.rows,10)||1)),cs=B.cells;
+  while(cs.length>rows*3)rows++;
+  var o=[];
+  o.push('<p style="font-size:0.5vw;">',T+'<br>','</p>');
+  o.push('<details style="background-image:url(\''+cssurl(bg)+'\');background-repeat:no-repeat;background-position:top;background-size:cover;background-color:dimgray;box-shadow:inset 0 0 10px 0px rgb(21,21,21,1);color:white;">');
+  o.push(T+'<summary style="list-style:none;display:block;">','',T+T+'<p style="font-size:0.5vw;">',T+T+T+'<br>',T+T+'</p>');
+  o.push(T+T+'<div style=\'background-image:url("'+cssurl(bn)+'");background-position:center center;background-size:100%;width:98%;background-repeat:no-repeat;text-align:center;padding-bottom:12%;\'>',T+T+T+'<br>',T+T+'</div>',T+'</summary>');
+  o.push(T+'<div>','',T+T+'<table style="border:none;width:100%;">',T+T+T+'<tbody>');
+  for(var r=0;r<rows;r++){
+    o.push(T+T+T+T+'<tr>');
+    for(var c=0;c<3;c++){
+      var cell=cs[r*3+c],w=(r===0?W[c]:'33.3333')+'%';
+      var td=T+T+T+T+T+'<td style="border:none;width:'+w+';">';
+      if(cell){
+        o.push(td,T+T+T+T+T+T+'<a href="'+esc(cell.s)+'" target="_blank" rel="noopener noreferrer"><img src="'+esc(cell.i)+'" data-originalurl="'+esc(cell.o||cell.i)+'" class="fr-fic fr-dii"></a></td>');
+      }else{
+        o.push(td,T+T+T+T+T+T+'<br>',T+T+T+T+T+'</td>');
+      }
+    }
+    o.push(T+T+T+T+'</tr>');
+  }
+  o.push(T+T+T+'</tbody>',T+T+'</table>',T+'</div>','</details>');
+  return o.join(nl);
+}
+function update(){
+  var B=getBlocks();
+  var code=B.map(build).join(nl+nl);
+  $('out').value=code;
+  $('pv').srcdoc='<body style="margin:8px;font-family:sans-serif">'+code.replace(/src="\/\//g,'src="https://').replace(/url\((['"])\/\//g,'url($1https://')+'</body>';
+  try{localStorage.setItem(KEY,JSON.stringify(B))}catch(e){}
+}
+$('addBlock').onclick=function(){addBlock();update()};
+blocksEl.addEventListener('input',update);
+$('copy').onclick=function(){
+  var t=$('out').value,m=$('msg');
+  function ok(){m.textContent='복사했어요';setTimeout(function(){m.textContent=''},2000)}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(ok,function(){$('out').select();document.execCommand('copy');ok()})}
+  else{$('out').select();document.execCommand('copy');ok()}
+};
+(function init(){
+  var s=null;
+  try{s=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
+  if(s&&s.length)s.forEach(addBlock);else addBlock();
+  update();
+})();
+</script>
+</body>
+</html>
